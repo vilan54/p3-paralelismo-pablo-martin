@@ -1,0 +1,98 @@
+m = n/p 
+
+N es multiplo de p por tanto da exacto
+
+Trocear la matriz con scatter . El vactor lo necesitan todos los procesos por tanto necesitamos un broadcast. Lo ultimo es juntarlo en el proceso 0 con un gather
+
+No se pueden solapar buffers , hay que hacer una matriz local de tamaño [m][n] y un tamañano local[m] 
+
+
+si debug = 0 imprime si debug = 1 tiempo de computacion 
+
+Para comprobar si funciona bien :
+gcc 
+./matevcc > out1
+more out1
+mpirun -n 1 ./matvec > out2
+diff out1 out2
+// no muestra nada entonces esta bien 
+
+
+Para hacer el caso general :
+
+1- Padding : bloque n/p pero redondeando hacia arriba . P.ej -> n= 10 p = 3 va a repartir 4 entonces necesitamos ampliar la matriz . Npadded = tamaño bloque * procesos
+
+Padding tambien en el vector
+
+block = (rank < p-1)
+		iguales filas que columnas
+		
+	else
+		N-m(p-1)
+		
+2- Mantener el N ( te van a faltar filas al final ) y que P0 calcula el resto de las filas
+
+3- Utilizar scatterv y gatherv (sirven para repartir bloques de tamaños que no son iguales), para configurar eso : arrays con tamaño igual a los procesos que tengamos
+
+sednts = 4 | 3 | 3*N
+displs = 0 | 4 | 7*N
+
+
+#include <stdio.h>
+#include <sys/time.h>
+
+#define DEBUG 1
+
+#define N 20  // Para no petarlo tanto,luego probarlo con mas grandes (1024)
+
+int main(int argc, char *argv[] ) {
+
+  int i, j;
+  float matrix[N][N];
+  float vector[N];
+  float result[N];
+  struct timeval  tv1, tv2;
+
+  /* Initialize Matrix and Vector */
+  for(i=0;i<bloque;i++) {		// Modificado
+    vector[i] = i;
+    for(j=0;j<N;j++) {
+      matrix[i][j] = i+j;
+    }
+  }
+  
+
+timestamp
+
+scatter
+broadcast
+
+  gettimeofday(&tv1, NULL);
+
+  for(i=0;i<N;i++) {
+    result[i]=0;
+    for(j=0;j<N;j++) {
+      result[i] += matrix[i][j]*vector[j];
+    }
+  }
+
+  gettimeofday(&tv2, NULL);
+  
+gather
+  
+timestamp
+    
+  int microseconds = (tv2.tv_usec - tv1.tv_usec)+ 1000000 * (tv2.tv_sec - tv1.tv_sec);
+
+  /*Display result */
+  if (DEBUG){
+    for(i=0;i<N;i++) {
+      printf(" %f \t ",result[i]);
+    }
+  } else {
+    printf ("Time (seconds) = %lf\n", (double) microseconds/1E6); // Modificar para los tiempos
+  }    
+
+  return 0;
+}
+
