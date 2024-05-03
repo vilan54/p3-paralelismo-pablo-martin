@@ -54,6 +54,10 @@ int main(int argc, char *argv[]) {
     // Broadcast vector a todos los procesos
     MPI_Bcast(vector, N, MPI_FLOAT, 0, MPI_COMM_WORLD);
     
+    if(rank == size - 1){
+        block_size = N - block_size * (size - 1);
+    }
+
     // Realizar el cálculo del producto matriz-vector localmente en cada proceso
     for(i=0;i<block_size;i++) {
         local_result[i]=0;
