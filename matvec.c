@@ -5,14 +5,14 @@
 #include <sys/time.h>
 
 #define N 1024
-#define DEBUG 1
+#define DEBUG 0
 
 int main(int argc, char *argv[]) {
     int i, j;
     int rank, size;
     int block_size;
     int padded_N;
-    struct timeval tv1, tv2;
+    struct timeval tv1, tv2, tv3, tv4;
 
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -32,6 +32,8 @@ int main(int argc, char *argv[]) {
     float vector[padded_N];
     float local_matrix[block_size][N];
     float local_result[block_size];
+    float t_communication_local, t_computation_local;
+    float t_communication[size], t_computation[size];
 
 
     // Inicializar la matriz y el vector en el proceso 0
@@ -47,13 +49,19 @@ int main(int argc, char *argv[]) {
             vector[i] = i;
         }
     }
-    MPI_Scatter(matrix, block_size * N, MPI_FLOAT, local_matrix, block_size * N, MPI_FLOAT, 0, MPI_COMM_WORLD);
-    
+
     gettimeofday(&tv1, NULL);
+    MPI_Scatter(matrix, block_size * N, MPI_FLOAT, local_matrix, block_size * N, MPI_FLOAT, 0, MPI_COMM_WORLD);    
 
     // Broadcast vector a todos los procesos
     MPI_Bcast(vector, N, MPI_FLOAT, 0, MPI_COMM_WORLD);
     
+    gettimeofday(&tv2, NULL);
+
+    t_communication_local = (tv2.tv_usec - tv1.tv_usec) + 1000000 * (tv2.tv_sec - tv1.tv_sec);
+
+    gettimeofday(&tv3, NULL);
+
     if(rank == size - 1){
         block_size = N - block_size * (size - 1);
     }
@@ -68,8 +76,12 @@ int main(int argc, char *argv[]) {
 
     MPI_Gather(local_result, block_size, MPI_FLOAT, result, block_size , MPI_FLOAT, 0, MPI_COMM_WORLD);
 
+    gettimeofday(&tv4, NULL);
 
-    gettimeofday(&tv2, NULL);
+    t_computation_local = (tv4.tv_usec - tv3.tv_usec) + 1000000 * (tv4.tv_sec - tv3.tv_sec);
+
+    MPI_Gather(&t_communication_local, 1, MPI_FLOAT, t_communication, 1, MPI_FLOAT, 0, MPI_COMM_WORLD);
+    MPI_Gather(&t_computation_local, 1, MPI_FLOAT, t_computation, 1, MPI_FLOAT, 0, MPI_COMM_WORLD);
 
     if (rank == 0) {
         int microseconds = (tv2.tv_usec - tv1.tv_usec) + 1000000 * (tv2.tv_sec - tv1.tv_sec);
@@ -79,7 +91,10 @@ int main(int argc, char *argv[]) {
                 printf(" %f \t ", result[i]);
             }
         } else {
-            printf("Time (seconds) = %lf\n", (double) microseconds / 1E6);
+            printf("\n%2s\t%9s\t%9s\t%9s\n", "Proc", "Comm time (s)", "Comp time (s)", "Total (s)");
+            for(int i=0; i<size; i++){
+                printf("%2d\t%2.7f\t%2.7f\t%2.7f\n", i, t_communication[i] , t_computation[i], t_communication[i]+t_computation[i]);
+            }
         }
     }
 
